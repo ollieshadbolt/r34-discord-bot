@@ -6,9 +6,11 @@ import urllib.request
 import xmltodict
 import random
 import discord
+import xml.parsers.expat
 
 __version__ = '1.0'
 
+domain = "https://rule34.xxx/index.php?"
 client = discord.Client()
 
 
@@ -19,14 +21,13 @@ def get_data(url):
     with urllib.request.urlopen(url) as file:
         xml = file.read()
 
-    return xmltodict.parse(xml.decode("utf8"))
+    return xmltodict.parse(xml.decode('utf-8', 'replace'))
 
 
 def get_post(tags):
     """
     Returns a random post from rule34.xxx using parameter tags.
     """
-    domain = "https://rule34.xxx/index.php?"
     url = domain + "page=dapi&s=post&q=index&tags=" + tags
     data = get_data(url)
     posts = 'posts'
@@ -51,32 +52,45 @@ def get_post(tags):
         index %= 100
 
     post = data[posts]['post'][index]
-    print(post)
-    return "%s\n<%s%s%s>" % (post['@file_url'], domain, "page=post&s=view&id=", post['@id'])
+    return "%s\n<%s%s%s>" % (
+        post['@file_url'], domain, "page=post&s=view&id=", post['@id']
+    )
 
+def get_comment():
+    """
+    Returns a random comment from rule34.xxx.
+    """
+    data = get_data(domain + "page=dapi&s=comment&q=index")
+    comment = random.choice(data['comments']['comment'])
+    return "> %s\n%s (<https://rule34.xxx/index.php?page=post&s=view&id=%s>)" % (comment['@body'], comment['@creator'], comment['@post_id'])
     
-
 
 @client.event
 async def on_message(message):
     content = message.content
     prefix = "+r34"
 
-    if not content.startswith(prefix):
-        return
-
-    if not message.channel.is_nsfw():
-        content = "This is NOT a NSFW channel."
-
-    else:
-        try:
+    try:
+        if content.startswith(prefix):
             content = get_post(content[len(prefix):].replace(" ", "+"))
 
-            if content is None:
-                content = "No results."
+        elif content.startswith("+pog"):
+            content = get_comment()
 
-        except urllib.error.URLError:
-            content = "Fetch failed."
+        else:
+            return
+
+    except urllib.error.URLError:
+        content = "Fetch failed."
+
+    except xml.parsers.expat.ExpatError:
+        content = "Parsing failed."
+
+    if content is None:
+        content = "No results."
+
+    elif not message.channel.is_nsfw():
+                content = "This is NOT a NSFW channel."
 
     await message.channel.send(content=content)
 
