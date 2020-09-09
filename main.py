@@ -26,7 +26,8 @@ def get_post(tags):
     """
     Returns a random post from rule34.xxx using parameter tags.
     """
-    url = "https://rule34.xxx/index.php?page=dapi&s=post&q=index&tags=" + tags
+    domain = "https://rule34.xxx/index.php?"
+    url = domain + "page=dapi&s=post&q=index&tags=" + tags
     data = get_data(url)
     posts = 'posts'
     count = int(data[posts]['@count'])
@@ -46,24 +47,36 @@ def get_post(tags):
             count = limit
 
         index = random.randint(0, count)
-        data = get_data(url + "&pid=" + str((index // items) - 1))
+        data = get_data(url + "&pid=" + str((index // items)))
         index %= 100
 
-    return data[posts]['post'][index]['@file_url']
+    post = data[posts]['post'][index]
+    print(post)
+    return "%s\n<%s%s%s>" % (post['@file_url'], domain, "page=post&s=view&id=", post['@id'])
+
+    
 
 
 @client.event
 async def on_message(message):
     content = message.content
-    prefix = "+r34 "
+    prefix = "+r34"
 
-    if not (content.startswith(prefix) and message.channel.is_nsfw()):
+    if not content.startswith(prefix):
         return
 
-    content = get_post(content[len(prefix):])
+    if not message.channel.is_nsfw():
+        content = "This is NOT a NSFW channel."
 
-    if content is None:
-        content = "No results."
+    else:
+        try:
+            content = get_post(content[len(prefix):].replace(" ", "+"))
+
+            if content is None:
+                content = "No results."
+
+        except urllib.error.URLError:
+            content = "Fetch failed."
 
     await message.channel.send(content=content)
 
